@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+
+import argparse
+import datetime
+import importlib
+import os
+import subprocess
+import sys
+import time
+
+# /!\ all odoo-required libs must be installed globally or use the same virtualenv
+# otherwise the import will fail
+src = os.environ.get('ODOO_SRC', '%s/src/odoo' % os.environ.get('HOME', ''))
+sys.path.insert(0, src)
+import odoo
+
+
+def parse():
+    parser = argparse.ArgumentParser(description="Odoo Performance Testing Tools")
+    parser.add_argument('script', type=str, nargs=1, help='script executing odoo code to benchmark')
+    parser.add_argument('--database', '-d', type=str, nargs=1, help='database to benchmark')
+    parser.add_argument(
+        '--persist', '-p', action='store_true',
+        help='Whether the actions performed by the script should be committed to db or not'
+    )
+    parser.add_argument(
+        '--graph', '-g', action='store_true',
+        help='Whether a flamegraph should be generated for the benchmark script'
+    )
+    parser.add_argument(
+        '--output', '-o', nargs=1,
+        help='Filepath of the generated flamegraph. Requires --graph/-g'
+    )
+    return parser.parse_args()
+
+
+def flamegraph(args):
+    if not args.graph:
+        return
+    pid = os.getpid()
+    fpath = args.output[0] or os.path.join(os.getcwd(), 'perf-%s.svg' % datetime.datetime.now())
+    pf = subprocess.Popen(['sudo', 'pyflame', '-p', str(pid), '-x'], stdout=subprocess.PIPE)
+    with open(fpath, 'w') as f:
+        fg = subprocess.Popen(['./flamegraph.pl'], stdin=pf.stdout, stdout=f)
+        fg.communicate()
+    print("Flamegraph generated at %s" % fpath)
+
+
+def main():
+    args = parse()
+
+    try:
+        script = importlib.import_module('scripts.%s' % args.script[0])
+    except ImportError:
+        print("The script %s could not be found, make sure to place it in the scripts directory!"
+                % args.script)
+        raise
+
+    db = args.database[0] or 'perf'
+    reg = odoo.registry(db)
+
+    with odoo.api.Environment.manage():
+        with reg.cursor() as cr:
+            env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
+
+            flamegraph(args)
+
+            start_t = time.time()
+            script.main(env)
+            end_t = time.time() - start_t
+
+            if args.persist:
+                cr.commit()
+            else:
+                cr.rollback()
+
+            print("Elapsed time: %2f" % end_t)
+
+
+if __name__ == '__main__':
+    main()
