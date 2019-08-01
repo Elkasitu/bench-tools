@@ -1,6 +1,3 @@
-import time
-
-
 def get_line_ids(env, location):
     product = env['product.product'].search([('name', '=', 'foobar3000')])
     lots = env['stock.production.lot'].search([('product_id', '=', product.id)])
@@ -16,8 +13,6 @@ def get_line_ids(env, location):
 
 
 def main(env):
-    start = time.time()
     inv = env['stock.inventory'].search([('name', '=', 'foobarbaz')])
     inv.line_ids = get_line_ids(env, inv.location_id)
     inv._action_done()
-    print("Elapsed time: %2f" % (time.time() - start))

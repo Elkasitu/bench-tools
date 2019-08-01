@@ -70,6 +70,9 @@ def main():
             end_t = time.time() - start_t
 
             if args.persist:
+                if hasattr(env.get('sale.order'), 'flush'):
+                    # do for nochange branch
+                    env['sale.order'].flush()
                 cr.commit()
             else:
                 cr.rollback()

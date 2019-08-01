@@ -4,13 +4,14 @@ from random import randint
 
 def prepare_po_lines(env):
     SOL = env['purchase.order.line']
-    products = env['product.product'].search([])
+    products = env['product.product'].search([('name', 'like', 'foo%')])
 
     vals = []
     for i, prod in enumerate(products):
         vals.append((0, False, {
             'name': 'foo%d' % i, 'product_id': prod.id, 'date_planned': datetime.now(),
             'product_uom': 1, 'price_unit': randint(1, 20), 'product_qty': randint(1, 500),
+            'company_id': env.company.id,
         }))
     return vals
 

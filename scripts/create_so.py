@@ -1,6 +1,6 @@
 def prepare_so_lines(env):
     SOL = env['sale.order.line']
-    products = env['product.product'].search([])
+    products = env['product.product'].search([('name', 'like', 'foo%')])
 
     vals = []
     for prod in products:
