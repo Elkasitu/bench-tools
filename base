@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+import timeit
 
 # /!\ all odoo-required libs must be installed globally or use the same virtualenv
 # otherwise the import will fail
@@ -19,6 +20,7 @@ def parse():
     parser = argparse.ArgumentParser(description="Odoo Performance Testing Tools")
     parser.add_argument('script', type=str, nargs=1, help='script executing odoo code to benchmark')
     parser.add_argument('--database', '-d', type=str, nargs=1, help='database to benchmark')
+    parser.add_argument('--timeit', '-t', nargs='?', default=1, help='time the script execution')
     parser.add_argument(
         '--persist', '-p', action='store_true',
         help='Whether the actions performed by the script should be committed to db or not'
@@ -46,6 +48,25 @@ def flamegraph(args):
     print("Flamegraph generated at %s" % fpath)
 
 
+TIME_MAP = {
+    0: 's',
+    1: 'ms',
+    2: 'μs',
+    3: 'ns',
+}
+
+
+def to_human_time(t, n):
+    iter_t = t / n
+    depth = 0
+
+    while iter_t < 1:
+        iter_t *= 1000
+        depth += 1
+
+    return f"{round(iter_t, 2)}{TIME_MAP[depth]}"
+
+
 def main():
     args = parse()
 
@@ -63,21 +84,20 @@ def main():
         with reg.cursor() as cr:
             env = odoo.api.Environment(cr, odoo.SUPERUSER_ID, {})
 
-            flamegraph(args)
-
-            start_t = time.time()
-            script.main(env)
-            end_t = time.time() - start_t
+            if args.timeit:
+                n = int(args.timeit[0])
+                # make this a script option
+                ttime = timeit.timeit('script.main(env)', number=n, globals=locals())
+                print(to_human_time(ttime, n))
+            else:
+                script.main(env)
 
             if args.persist:
-                if hasattr(env.get('sale.order'), 'flush'):
-                    # do for nochange branch
-                    env['sale.order'].flush()
+                # TODO: version < 13 ???
+                env['base'].flush()
                 cr.commit()
             else:
                 cr.rollback()
-
-            print("Elapsed time: %2f" % end_t)
 
 
 if __name__ == '__main__':
